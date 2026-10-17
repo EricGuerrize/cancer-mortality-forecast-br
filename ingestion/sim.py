@@ -105,15 +105,20 @@ def download_sim_uf_year(
 
 
 def _year_from_dtobito(series: pd.Series, fallback_year: int) -> pd.Series:
+    """
+    Extrai o ano de DTOBITO.
+
+    O SIM usa preferencialmente `ddmmaaaa`. Datas como `19052020` (19/05/2020)
+    NÃO devem ser lidas como ISO (`1905-20-20`).
+    """
     text = series.astype(str).str.replace(r"\D", "", regex=True)
-    # ddmmaaaa → últimos 4 dígitos; aaaammdd → primeiros 4
-    years = pd.Series(fallback_year, index=series.index, dtype="int64")
     mask8 = text.str.len() == 8
-    # Heurística: se começa com 19/20, é aaaammdd; senão ddmmaaaa
-    starts_year = text.str.startswith(("19", "20"))
-    y_iso = pd.to_numeric(text.where(mask8 & starts_year).str[:4], errors="coerce")
-    y_br = pd.to_numeric(text.where(mask8 & ~starts_year).str[-4:], errors="coerce")
-    years = y_iso.fillna(y_br).fillna(fallback_year).astype(int)
+    y_br = pd.to_numeric(text.where(mask8).str[-4:], errors="coerce")
+    y_iso = pd.to_numeric(text.where(mask8).str[:4], errors="coerce")
+    # Aceita BR se o ano estiver em janela plausível do SIM CID-10; senão tenta ISO.
+    br_ok = y_br.between(1996, 2100)
+    years = y_br.where(br_ok, y_iso)
+    years = years.fillna(fallback_year).astype(int)
     return years
 
 

@@ -124,13 +124,34 @@ def make_sample_cmd(
     ] = None,
     seed: Annotated[int, typer.Option(help="Semente reprodutível")] = 42,
 ) -> None:
-    """Gera amostra agregada sintética (sem microdados reais) para CI/demo."""
+    """Gera amostra sintética (offline). Preferir make-sample-real para dados públicos reais."""
     from ingestion.sample_data import write_sample_bundle
 
     settings = get_settings()
     out = output or settings.sample
     paths = write_sample_bundle(out, seed=seed)
-    console.print("[green]Amostra gerada:[/]", paths)
+    console.print("[green]Amostra sintética gerada:[/]", paths)
+
+
+@app.command("make-sample-real")
+def make_sample_real_cmd(
+    years: Annotated[str, typer.Option(help="Anos SIM (ex.: 2020-2022)")] = "2020-2022",
+    ufs: Annotated[str, typer.Option(help="UFs separadas por vírgula")] = "AC,SP,RJ",
+    output: Annotated[
+        Path | None,
+        typer.Option(help="Destino (default: data/sample)"),
+    ] = None,
+) -> None:
+    """Baixa SIM+IBGE e grava agregados reais (células < 5 suprimidas) em data/sample/."""
+    from ingestion.sample_data import write_real_sample_bundle
+
+    settings = get_settings()
+    out = output or settings.sample
+    year_list = _parse_years(years)
+    uf_list = [u.strip().upper() for u in ufs.split(",") if u.strip()]
+    console.print(f"[bold]Amostra real[/] anos={year_list} ufs={uf_list} → {out}")
+    paths = write_real_sample_bundle(out, years=year_list, ufs=uf_list)
+    console.print("[green]Amostra real gerada:[/]", paths)
 
 
 def _parse_years(spec: str) -> list[int]:

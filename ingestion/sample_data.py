@@ -54,9 +54,10 @@ def build_synthetic_micro_mock(
 
     # Concentra idades adultas para reduzir dispersão excessiva
     ages = list(range(40, 85))
+    uf_p = [0.05, 0.45, 0.2, 0.15, 0.15] if len(ufs) == 5 else None
     rows = {
         "year": rng.choice(years, size=n_rows),
-        "uf": rng.choice(ufs, size=n_rows, p=[0.05, 0.45, 0.2, 0.15, 0.15]),
+        "uf": rng.choice(ufs, size=n_rows, p=uf_p),
         "sexo": rng.choice(["M", "F"], size=n_rows, p=[0.52, 0.48]),
         "idade_anos": rng.choice(ages, size=n_rows),
         "causabas": rng.choice(all_cids, size=n_rows),
@@ -150,8 +151,33 @@ def build_population_sample(
     return pd.DataFrame.from_records(records)
 
 
+def _write_sample_docs(output_dir: Path, *, real: bool) -> None:
+    if real:
+        readme = (
+            "# Amostras versionadas (`data/sample/`)\n\n"
+            "| Arquivo | Natureza | Conteúdo |\n"
+            "|---------|----------|----------|\n"
+            "| `cancer_deaths_agg.parquet` | **Agregados reais** (SIM/DATASUS) | "
+            "Óbitos C00–C97 × UF × sexo × faixa × grupo × ano; células &lt; 5 "
+            "suprimidas. |\n"
+            "| `ill_defined_counts.parquet` | **Agregados reais** (SIM) | R00–R99. |\n"
+            "| `ibge_population_sample.parquet` | **Recorte real** (IBGE rev. 2024) | "
+            "UF/sexo/idade. |\n"
+            "| `cancer_deaths_micro_mock.parquet` | **Sintético** | Só para testes de "
+            "re-agregação (não é SIM). |\n\n"
+            "**Sem microdados reais / sem PII.** Ver também `PROVENANCE.md`.\n"
+        )
+    else:
+        readme = (
+            "# Amostras sintéticas (geradas por `make-sample`)\n\n"
+            "Pacote offline para testes. O repositório versiona preferencialmente "
+            "agregados **reais** via `make-sample-real`.\n"
+        )
+    (output_dir / "README.md").write_text(readme, encoding="utf-8")
+
+
 def write_sample_bundle(output_dir: Path, *, seed: int = 42) -> dict[str, str]:
-    """Escreve o pacote mínimo versionado em data/sample/."""
+    """Gera pacote sintético (útil em testes unitários sem rede)."""
     output_dir.mkdir(parents=True, exist_ok=True)
 
     micro = build_synthetic_micro_mock(seed=seed)
@@ -163,9 +189,7 @@ def write_sample_bundle(output_dir: Path, *, seed: int = 42) -> dict[str, str]:
     cancer = micro.loc[micro["is_cancer"]].copy()
     ill = micro.loc[micro["is_ill_defined"]].copy()
 
-    # Agregado commitado: gerado com densidade controlada (não o micro esparso)
     agg = build_aggregated_sample(seed=seed)
-    # Micro ainda serve para re-agregar no demo (exercita a lógica)
     _ = aggregate_cancer_deaths(cancer, threshold=5, apply_suppression=True)
 
     ill_counts = (
@@ -191,20 +215,79 @@ def write_sample_bundle(output_dir: Path, *, seed: int = 42) -> dict[str, str]:
         ["year", "uf", "sexo", "idade_anos", "age_group", "causabas", "codmunres"],
     ]
     micro_out.to_parquet(paths["cancer_deaths_micro_mock"], index=False)
+    _write_sample_docs(output_dir, real=False)
+    _ = ALL_UFS
+    return {k: str(v) for k, v in paths.items()}
 
-    readme = output_dir / "README.md"
-    readme.write_text(
-        "# Amostras (sem microdados reais)\n\n"
-        "- `cancer_deaths_agg.parquet`: contagens por UF × sexo × faixa etária × "
-        "grupo de câncer × ano, com células < 5 suprimidas.\n"
-        "- `ill_defined_counts.parquet`: contagens de causas R00–R99.\n"
-        "- `ibge_population_sample.parquet`: recorte sintético de população.\n"
-        "- `cancer_deaths_micro_mock.parquet`: microdados **sintéticos** para testes "
-        "(não são registros do SIM).\n\n"
-        "Nenhum arquivo aqui contém PII ou microdados reais do DATASUS.\n",
-        encoding="utf-8",
+
+def write_real_sample_bundle(
+    output_dir: Path,
+    *,
+    years: list[int],
+    ufs: list[str],
+) -> dict[str, str]:
+    """
+    Baixa SIM + IBGE e grava agregados reais (com supressão) em output_dir.
+
+    Não versiona microdados: apenas contagens agregadas + mock sintético auxiliar.
+    """
+    from ingestion.ibge import ingest_ibge
+    from ingestion.sim import (
+        download_sim_uf_year,
+        filter_cancer_and_ill_defined,
+        transform_sim_microdata,
     )
 
-    _ = ALL_UFS  # documenta UFs disponíveis no projeto
+    output_dir.mkdir(parents=True, exist_ok=True)
+    cancer_frames: list[pd.DataFrame] = []
+    ill_frames: list[pd.DataFrame] = []
+    for year in years:
+        for uf in ufs:
+            raw = download_sim_uf_year(uf, int(year), sources=("catalog", "origin"))
+            transformed = transform_sim_microdata(raw, uf=uf, year=int(year))
+            cancer, ill = filter_cancer_and_ill_defined(transformed)
+            cancer_frames.append(cancer.loc[cancer["year"] == int(year)])
+            ill_frames.append(ill.loc[ill["year"] == int(year)])
 
+    cancer = pd.concat(cancer_frames, ignore_index=True) if cancer_frames else pd.DataFrame()
+    ill = pd.concat(ill_frames, ignore_index=True) if ill_frames else pd.DataFrame()
+    agg = aggregate_cancer_deaths(cancer, threshold=5, apply_suppression=True)
+    from ingestion.aggregate import aggregate_ill_defined
+
+    ill_counts = aggregate_ill_defined(ill)
+
+    raw_dir = output_dir.parent / "raw"
+    ibge_result = ingest_ibge(output_dir=raw_dir, keep_xlsx=False)
+    pop = pd.read_parquet(ibge_result["parquet"])
+    pop_sample = pop.loc[pop["uf"].isin(ufs) & pop["year"].isin([*years, 2030])].copy()
+
+    micro = build_synthetic_micro_mock(
+        seed=42,
+        years=tuple(years),
+        ufs=tuple(ufs),
+        n_rows=800,
+    )
+
+    paths = {
+        "cancer_deaths_agg": output_dir / "cancer_deaths_agg.parquet",
+        "ill_defined_counts": output_dir / "ill_defined_counts.parquet",
+        "ibge_population_sample": output_dir / "ibge_population_sample.parquet",
+        "cancer_deaths_micro_mock": output_dir / "cancer_deaths_micro_mock.parquet",
+    }
+    agg.to_parquet(paths["cancer_deaths_agg"], index=False)
+    ill_counts.to_parquet(paths["ill_defined_counts"], index=False)
+    pop_sample.to_parquet(paths["ibge_population_sample"], index=False)
+    micro.loc[
+        :,
+        ["year", "uf", "sexo", "idade_anos", "age_group", "causabas", "codmunres"],
+    ].to_parquet(paths["cancer_deaths_micro_mock"], index=False)
+    _write_sample_docs(output_dir, real=True)
+    (output_dir / "PROVENANCE.md").write_text(
+        "# Proveniência\n\n"
+        f"SIM (PySUS catalog/origin): UFs {', '.join(ufs)}; anos "
+        f"{years[0]}–{years[-1]}.\n"
+        "IBGE revisão 2024: `projecoes_2024_tab1_idade_simples.xlsx`.\n"
+        "Células com menos de 5 óbitos suprimidas. Sem microdados versionados.\n",
+        encoding="utf-8",
+    )
     return {k: str(v) for k, v in paths.items()}

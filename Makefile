@@ -9,7 +9,8 @@ help:
 	@echo "  make setup         - instala o pacote + extras de desenvolvimento"
 	@echo "  make lint          - ruff check"
 	@echo "  make test          - pytest"
-	@echo "  make sample        - gera data/sample/ (agregados sintéticos)"
+	@echo "  make sample        - gera data/sample/ sintético (testes)"
+	@echo "  make sample-real   - regenera data/sample/ com agregados reais (rede)"
 	@echo "  make demo          - roda demo offline a partir de data/sample/"
 	@echo "  make ingest        - download completo SIM + IBGE → data/raw/"
 	@echo "  make docker-build  - build da imagem Docker"
@@ -29,6 +30,10 @@ test:
 
 sample:
 	$(CLI) make-sample
+
+sample-real:
+	$(PIP) install -e ".[dev,sim]"
+	$(CLI) make-sample-real --years 2020-2022 --ufs AC,SP,RJ
 
 demo:
 	$(CLI) demo

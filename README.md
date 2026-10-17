@@ -23,7 +23,9 @@ python -m pip install -e ".[dev]"
 make demo
 ```
 
-Isso usa apenas `data/sample/` (agregados sintéticos / sem microdados reais, células &lt; 5 suprimidas) e **não precisa de rede**.
+Isso usa apenas `data/sample/` e **não precisa de rede**.
+
+**O que há em `data/sample/`:** agregados **reais** do SIM (DATASUS) para AC/SP/RJ, 2020–2022, com células &lt; 5 suprimidas; recorte **real** das projeções IBGE (rev. 2024); e um micro-mock **sintético** só para testes de re-agregação. **Sem microdados reais.** Detalhes em [`data/sample/README.md`](data/sample/README.md).
 
 Com Docker:
 
@@ -77,7 +79,7 @@ flowchart LR
 | Pasta | Função |
 |-------|--------|
 | `ingestion/` | Download SIM/IBGE, CID, agregação, CLI |
-| `data/sample/` | Amostra agregada versionada (demo/CI offline) |
+| `data/sample/` | Agregados **reais** SIM/IBGE (demo/CI offline; ver README da pasta) |
 | `data/raw/` | Microdados/parquets baixados (**gitignored**) |
 | `dbt/` | Semana 2 |
 | `forecasting/` | Semana 3 |
@@ -133,9 +135,9 @@ Para ingestão SIM: `pip install -e ".[sim]"` (puxa PySUS/GPL).
 
 ## Ética e LGPD
 
-- Artefatos versionados são **apenas agregados públicos** (e mocks sintéticos para CI).
-- Microdados do SIM **não entram no Git** (`data/raw/` ignorado).
-- Células com **menos de 5 óbitos** são suprimidas na amostra.
+- Em `data/sample/` versionamos **agregados públicos reais** (SIM/IBGE) com células &lt; 5
+  suprimidas, mais um mock sintético auxiliar — **nunca** microdados do SIM.
+- Microdados brutos ficam só em `data/raw/` (**gitignored**).
 - As previsões são de **nível populacional** (UF × tipo × demografia), **não** estimam risco individual.
 
 ---
