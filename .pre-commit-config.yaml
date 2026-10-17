@@ -1,0 +1,40 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.6
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+      - id: check-merge-conflict
+
+  - repo: local
+    hooks:
+      - id: block-dotenv
+        name: bloquear commit de .env
+        entry: bash -c 'for f in "$@"; do base=$(basename "$f"); if [ "$base" = ".env" ] || [[ "$base" == .env.* && "$base" != ".env.example" ]]; then echo "Não versione arquivos .env: $f"; exit 1; fi; done'
+        language: system
+        files: '^\.env(\..+)?$'
+        exclude: '^\.env\.example$'
+
+      - id: block-large-csv
+        name: bloquear CSV grandes (>= 500KB)
+        entry: bash -c 'for f in "$@"; do
+          if [[ "$f" == *.csv ]] || [[ "$f" == *.CSV ]]; then
+            size=$(wc -c < "$f");
+            if [ "$size" -ge 512000 ]; then
+              echo "CSV grande demais para o git ($size bytes): $f";
+              exit 1;
+            fi;
+          fi;
+          done'
+        language: system
+        files: '\.csv$'
