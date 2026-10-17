@@ -1,0 +1,17 @@
+services:
+  demo:
+    build: .
+    image: cancer-mortality-forecast-br:local
+    command: ["make", "demo"]
+    volumes:
+      - ./data/sample:/app/data/sample:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  # Placeholders para semanas 4 (API / dashboard) — não usados na semana 1.
+  # api:
+  #   build: .
+  #   command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+  #   ports: ["8000:8000"]
+  #   environment:
+  #     - PORT=8000
