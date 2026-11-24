@@ -29,23 +29,34 @@ sim = [
   # PySUS é GPL-3.0; usado apenas como dependência opcional de download.
   "pysus>=2.11",
 ]
+dbt = [
+  "dbt-core>=1.8,<1.11",
+  "dbt-duckdb>=1.8,<1.10",
+]
+orchestration = [
+  "cancer-mortality-forecast-br[dbt]",
+  "dagster>=1.8,<1.11",
+  "dagster-webserver>=1.8,<1.11",
+  "duckdb>=1.1",
+]
 dev = [
   "pytest>=8.0",
   "pytest-cov>=5.0",
   "ruff>=0.6",
   "pre-commit>=3.7",
+  "cancer-mortality-forecast-br[dbt]",
 ]
 
 [project.scripts]
 cancer-mortality = "ingestion.cli:app"
 
 [tool.hatch.build.targets.wheel]
-packages = ["ingestion"]
+packages = ["ingestion", "forecasting", "orchestration"]
 
 [tool.ruff]
 target-version = "py311"
 line-length = 100
-src = ["ingestion", "tests"]
+src = ["ingestion", "forecasting", "orchestration", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]

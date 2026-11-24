@@ -12,7 +12,7 @@ Pipeline **end-to-end e reproduzível** que projeta a mortalidade por câncer **
 
 O câncer é uma das principais causas de morte no Brasil, com padrões muito diferentes por **tipo tumoral**, **sexo**, **idade** e **UF**. Gestores e pesquisadores precisam de séries e projeções **transparentes, auditáveis e reproduzíveis** — não de caixas-pretas.
 
-Este projeto monta um lakehouse analítico leve (Parquet + DuckDB/dbt) e modelos de previsão, com demo offline e CI desde a semana 1.
+Este projeto monta um lakehouse analítico leve (Parquet + DuckDB/dbt), orquestração Dagster e baselines de previsão, com demo offline e CI.
 
 ---
 
@@ -35,7 +35,21 @@ docker compose run --rm demo
 
 ---
 
-## Arquitetura (semana 1 → 4)
+## Semana 2 — dbt + orquestração
+
+```bash
+pip install -e ".[dev,orchestration]"
+make dbt-build          # staging → intermediate → marts (+ testes)
+make dagster-job        # ingest → dbt → forecast naive → quality
+# ou UI: make dagster  → http://localhost:3000
+# ou:    docker compose up --build dagster
+```
+
+Artefatos em `data/processed/` (gitignored): DuckDB, forecast naive, relatório de qualidade.
+
+---
+
+## Arquitetura
 
 ```mermaid
 flowchart LR
@@ -50,8 +64,13 @@ flowchart LR
     SAMPLE[(data/sample<br/>agregados)]
   end
 
-  subgraph s2[Semana 2 — dbt-duckdb]
-    DBT[Modelos + testes<br/>taxas brutas e ASE]
+  subgraph s2[Semana 2 — dbt-duckdb + Dagster]
+    ORCH[Dagster assets]
+    STG[staging]
+    INT[intermediate]
+    MARTS[marts<br/>taxas brutas + ASR OMS<br/>qualidade R00-R99]
+    NAIVE[Forecast naive]
+    QC[Quality checks]
   end
 
   subgraph s3[Semana 3 — Forecast]
@@ -69,20 +88,38 @@ flowchart LR
   IBGE --> CLI
   CLI --> RAW
   CLI --> SAMPLE
-  RAW --> DBT
-  SAMPLE --> DBT
-  DBT --> ML --> MLF
+  SAMPLE --> ORCH
+  RAW --> ORCH
+  ORCH --> STG --> INT --> MARTS
+  MARTS --> NAIVE --> QC
+  MARTS --> ML --> MLF
   ML --> API --> UI
   RAW -.-> TF
 ```
 
+### Linhagem dbt
+
+```text
+sample Parquet
+  ├─ cancer_deaths_agg → stg_sim_cancer_deaths → int_cancer_deaths_labeled
+  │                                                └─ int_deaths_with_population
+  ├─ ibge_population_sample → stg_ibge_population → int_population_age_group ─┘
+  │                              └─ fct_crude_mortality_rates
+  │                              └─ fct_age_standardized_rates  (+ seed WHO)
+  │                              └─ dim_cancer_groups           (+ seed labels)
+  └─ ill_defined_counts → stg_sim_ill_defined → fct_ill_defined_quality
+```
+
+Detalhes: [`dbt/README.md`](dbt/README.md).
+
 | Pasta | Função |
 |-------|--------|
 | `ingestion/` | Download SIM/IBGE, CID, agregação, CLI |
-| `data/sample/` | Agregados **reais** SIM/IBGE (demo/CI offline; ver README da pasta) |
+| `data/sample/` | Agregados **reais** SIM/IBGE (demo/CI offline) |
 | `data/raw/` | Microdados/parquets baixados (**gitignored**) |
-| `dbt/` | Semana 2 |
-| `forecasting/` | Semana 3 |
+| `dbt/` | Modelos dbt-duckdb, seeds OMS/CID, testes |
+| `orchestration/` | Dagster: ingest → dbt → forecast → quality |
+| `forecasting/` | Baseline naive (semana 2); modelos na semana 3 |
 | `api/`, `dashboard/` | Semana 4 |
 | `infra/terraform/` | Semana 4 (opcional) |
 | `tests/` | Pytest (CID, schema, supressão, mocks de rede) |
@@ -92,7 +129,7 @@ flowchart LR
 ## Roadmap
 
 - [x] **Semana 1** — Ingestão + Docker + CI + sample + README
-- [ ] **Semana 2** — dbt-duckdb: grupos CID, taxas brutas e padronizadas (OMS), R00–R99, testes dbt
+- [x] **Semana 2** — dbt-duckdb (taxas brutas/ASR OMS, R00–R99, testes) + Dagster + CI dbt
 - [ ] **Semana 3** — Forecast: naive/drift, ETS/ARIMA, Poisson/NegBin, LightGBM, backtesting, MLflow
 - [ ] **Semana 4** — FastAPI + Streamlit (+ Terraform S3/Glue/Athena opcional)
 
@@ -104,20 +141,35 @@ flowchart LR
 |-------|-----|------------|
 | **DATASUS / SIM** | Óbitos com causa básica CID-10; recorte **C00–C97**; monitoramento **R00–R99** | Ministério da Saúde. Sistema de Informações sobre Mortalidade (SIM). Acesso via FTP DATASUS / espelho Parquet [PySUS](https://github.com/AlertaDengue/PySUS). |
 | **IBGE** | População por UF, sexo e idade simples, **2000–2070**, revisão **2024** (`projecoes_2024_tab1_idade_simples.xlsx`) | IBGE. [Projeções da População](https://www.ibge.gov.br/estatisticas/sociais/populacao/9109-projecao-da-populacao.html) · [FTP](https://ftp.ibge.gov.br/Projecao_da_Populacao/Projecao_da_Populacao_2024/) |
+| **OMS** | População-padrão mundial para ASR (método direto) | Ahmad et al. (2001), WHO World Standard — seed `dbt/seeds/who_world_standard_population.csv` |
 
 Detalhes de layout e colunas: [`docs/data-sources.md`](docs/data-sources.md).
+
+---
+
+## Orquestração: por que Dagster?
+
+A vaga aceita **Airflow ou Dagster**. Escolhemos **Dagster** para o portfolio local:
+
+- **1 serviço** no compose (`dagster dev`) vs webserver + scheduler + Postgres do Airflow
+- Assets espelham a linhagem dbt (ingest → transform → forecast → quality)
+- Mesmo fluxo que um DAG Airflow teria, documentado em [`orchestration/README.md`](orchestration/README.md)
 
 ---
 
 ## Comandos úteis
 
 ```bash
-make setup    # ambiente de desenvolvimento
-make lint     # ruff
-make test     # pytest
-make demo     # offline
-make ingest   # download completo SIM (2018–2022) + IBGE → data/raw/
+make setup         # pacote + dbt + dagster
+make lint          # ruff
+make test          # pytest
+make demo          # offline
+make dbt-build     # dbt deps + build (sample)
+make dagster       # UI em :3000
+make dagster-job   # job completo via CLI
+make ingest        # download completo SIM (2018–2022) + IBGE → data/raw/
 make docker-build
+docker compose up --build dagster
 ```
 
 CLI:
@@ -129,7 +181,7 @@ cancer-mortality ingest-sim --years 2018-2022 --ufs SP,RJ
 cancer-mortality make-sample
 ```
 
-Para ingestão SIM: `pip install -e ".[sim]"` (puxa PySUS/GPL).
+Extras: `pip install -e ".[sim]"` (PySUS/GPL) · `".[dbt]"` · `".[orchestration]"`.
 
 ---
 
@@ -139,9 +191,10 @@ Para ingestão SIM: `pip install -e ".[sim]"` (puxa PySUS/GPL).
   suprimidas, mais um mock sintético auxiliar — **nunca** microdados do SIM.
 - Microdados brutos ficam só em `data/raw/` (**gitignored**).
 - As previsões são de **nível populacional** (UF × tipo × demografia), **não** estimam risco individual.
+- Teste dbt customizado `deaths_null_when_suppressed` garante que células suprimidas não vazam contagens.
 
 ---
 
-## Stack (semana 1)
+## Stack
 
-Python 3.11+ · pandas · pyarrow · httpx · tenacity · typer · pydantic · ruff · pytest · Docker · GitHub Actions · PySUS (opcional, GPL)
+Python 3.11+ · pandas · pyarrow · httpx · tenacity · typer · pydantic · **dbt-duckdb** · **Dagster** · ruff · pytest · Docker · GitHub Actions · PySUS (opcional, GPL)

@@ -32,6 +32,19 @@ data/interim/
 *.dbf
 *.csv
 !data/sample/**
+!dbt/seeds/**/*.csv
+
+# dbt / DuckDB
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+*.duckdb
+*.duckdb.wal
+
+# Dagster
+.tmp_dagster_home_*/
+dagster_home/
+.dagster/
 
 # Notebooks / IDE
 .ipynb_checkpoints/
@@ -48,11 +61,12 @@ infra/terraform/.terraform/
 infra/terraform/*.tfstate*
 infra/terraform/*.tfvars
 
-# MLflow / modelos (semana 3+)
+# MLflow / artefatos de modelo na raiz (semana 3+) — não confundir com dbt/models/
 mlruns/
-models/
+/models/
 *.pkl
 *.joblib
 
 # Docker
 *.tar
+dbt/.user.yml

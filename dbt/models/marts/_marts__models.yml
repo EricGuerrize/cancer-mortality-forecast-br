@@ -1,0 +1,152 @@
+version: 2
+
+models:
+  - name: dim_cancer_groups
+    description: Dimensão de grupos analíticos de câncer (CID-10 / GLOBOCAN).
+    columns:
+      - name: cancer_group
+        description: Código do grupo (chave natural).
+        tests:
+          - unique
+          - not_null
+      - name: cancer_group_label
+        description: Rótulo em português.
+        tests:
+          - not_null
+      - name: cid_start
+        description: Início da faixa CID-10 (categoria).
+        tests:
+          - not_null
+      - name: cid_end
+        description: Fim da faixa CID-10 (categoria).
+        tests:
+          - not_null
+
+  - name: fct_crude_mortality_rates
+    description: >
+      Fato de taxas brutas de mortalidade por câncer (por 100 mil hab.),
+      agregadas por year × uf × sexo × cancer_group.
+    columns:
+      - name: year
+        description: Ano do óbito.
+        tests:
+          - not_null
+      - name: uf
+        description: UF de residência.
+        tests:
+          - not_null
+      - name: sexo
+        description: Sexo (M/F).
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["M", "F"]
+      - name: cancer_group
+        description: Grupo de câncer.
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_cancer_groups')
+              field: cancer_group
+      - name: cancer_group_label
+        description: Rótulo do grupo.
+        tests:
+          - not_null
+      - name: deaths
+        description: Óbitos (não suprimidos) somados.
+        tests:
+          - not_null
+      - name: population
+        description: População somada nas faixas com óbitos observados.
+        tests:
+          - not_null
+      - name: crude_rate_per_100k
+        description: Taxa bruta por 100 mil habitantes.
+        tests:
+          - not_null
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - year
+            - uf
+            - sexo
+            - cancer_group
+
+  - name: fct_age_standardized_rates
+    description: >
+      Fato de taxas padronizadas por idade (ASR, método direto, OMS World Standard).
+      Por year × uf × sexo × cancer_group.
+    columns:
+      - name: year
+        description: Ano do óbito.
+        tests:
+          - not_null
+      - name: uf
+        description: UF.
+        tests:
+          - not_null
+      - name: sexo
+        description: Sexo (M/F).
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["M", "F"]
+      - name: cancer_group
+        description: Grupo de câncer.
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_cancer_groups')
+              field: cancer_group
+      - name: asr_per_100k
+        description: Taxa padronizada por idade por 100 mil (OMS).
+        tests:
+          - not_null
+      - name: age_bands_used
+        description: Número de faixas etárias com dados na ASR.
+        tests:
+          - not_null
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - year
+            - uf
+            - sexo
+            - cancer_group
+
+  - name: fct_ill_defined_quality
+    description: >
+      Indicador de qualidade da causa básica — participação de R00–R99
+      relativa aos óbitos por câncer na mesma célula demográfica.
+    columns:
+      - name: year
+        tests:
+          - not_null
+      - name: uf
+        tests:
+          - not_null
+      - name: sexo
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["M", "F"]
+      - name: age_group
+        tests:
+          - not_null
+      - name: deaths_ill_defined
+        description: Óbitos R00–R99.
+        tests:
+          - not_null
+      - name: deaths_cancer
+        description: Óbitos por câncer (não suprimidos) na célula.
+        tests:
+          - not_null
+      - name: ill_defined_share
+        description: Proporção R00–R99 / (câncer + R00–R99).
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - year
+            - uf
+            - sexo
+            - age_group
