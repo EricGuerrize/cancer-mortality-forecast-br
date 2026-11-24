@@ -1,0 +1,48 @@
+name: cancer_mortality
+version: 1.0.0
+config-version: 2
+
+profile: cancer_mortality
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+clean-targets:
+  - target
+  - dbt_packages
+  - logs
+
+models:
+  cancer_mortality:
+    staging:
+      +schema: staging
+      +materialized: view
+    intermediate:
+      +schema: intermediate
+      +materialized: view
+    marts:
+      +schema: marts
+      +materialized: table
+
+seeds:
+  cancer_mortality:
+    +schema: seeds
+    who_world_standard_population:
+      +column_types:
+        age_group: varchar
+        standard_population: integer
+    cancer_group_labels:
+      +column_types:
+        cancer_group: varchar
+        label_pt: varchar
+        cid_start: varchar
+        cid_end: varchar
+
+vars:
+  # Diretório relativo a dbt/ com os Parquets de entrada (sample por padrão).
+  sample_data_dir: "../data/sample"
+  rate_scale: 100000

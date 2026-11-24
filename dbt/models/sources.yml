@@ -1,0 +1,58 @@
+version: 2
+
+sources:
+  - name: sample
+    description: >
+      Agregados públicos versionados em data/sample/ (SIM/DATASUS e IBGE).
+      Sem microdados nem PII. Usados na demo offline e no CI.
+    meta:
+      external_location: "read_parquet('{{ var(\"sample_data_dir\") }}/{name}.parquet')"
+    tables:
+      - name: cancer_deaths_agg
+        description: >
+          Óbitos por câncer (CID-10 C00–C97) agregados por
+          year × uf × sexo × age_group × cancer_group. Células < 5 suprimidas.
+        columns:
+          - name: year
+            description: Ano do óbito (calendário).
+          - name: uf
+            description: Sigla da UF de residência.
+          - name: sexo
+            description: Sexo normalizado (M/F/I).
+          - name: age_group
+            description: Faixa etária quinquenal (alinhada à OMS).
+          - name: cancer_group
+            description: Grupo analítico de neoplasia (aprox. GLOBOCAN/IARC).
+          - name: deaths
+            description: Contagem de óbitos; nulo quando suppressed=true.
+          - name: suppressed
+            description: True se a célula foi suprimida por limiar de privacidade.
+
+      - name: ill_defined_counts
+        description: Contagens de causas mal definidas (CID-10 R00–R99).
+        columns:
+          - name: year
+            description: Ano do óbito.
+          - name: uf
+            description: Sigla da UF de residência.
+          - name: sexo
+            description: Sexo normalizado (M/F/I).
+          - name: age_group
+            description: Faixa etária quinquenal.
+          - name: deaths_ill_defined
+            description: Número de óbitos com causa básica R00–R99.
+
+      - name: ibge_population_sample
+        description: >
+          Recorte das projeções IBGE rev. 2024 (idade simples) para as UFs/anos da amostra.
+        columns:
+          - name: year
+            description: Ano de referência da projeção (1º de julho).
+          - name: uf
+            description: Sigla da UF.
+          - name: sexo
+            description: Sexo (M/F).
+          - name: age
+            description: Idade simples em anos (0–90+).
+          - name: population
+            description: População projetada.

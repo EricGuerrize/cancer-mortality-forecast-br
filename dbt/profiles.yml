@@ -1,0 +1,15 @@
+# Perfil local/CI — sem credenciais de nuvem.
+# Uso: dbt build --project-dir dbt --profiles-dir dbt
+cancer_mortality:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "../data/processed/cancer_mortality.duckdb"
+      threads: 4
+      settings:
+        s3_region: ""
+    ci:
+      type: duckdb
+      path: ":memory:"
+      threads: 2

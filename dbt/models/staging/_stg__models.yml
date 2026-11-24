@@ -1,0 +1,138 @@
+version: 2
+
+models:
+  - name: stg_sim_cancer_deaths
+    description: Óbitos por câncer agregados (SIM), tipados e normalizados.
+    columns:
+      - name: year
+        description: Ano do óbito.
+        tests:
+          - not_null
+      - name: uf
+        description: UF de residência.
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA",
+                       "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN",
+                       "RS", "RO", "RR", "SC", "SP", "SE", "TO"]
+      - name: sexo
+        description: Sexo (M/F/I).
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["M", "F", "I"]
+      - name: age_group
+        description: Faixa etária quinquenal.
+        tests:
+          - not_null
+          - accepted_values:
+              values:
+                - "00-04"
+                - "05-09"
+                - "10-14"
+                - "15-19"
+                - "20-24"
+                - "25-29"
+                - "30-34"
+                - "35-39"
+                - "40-44"
+                - "45-49"
+                - "50-54"
+                - "55-59"
+                - "60-64"
+                - "65-69"
+                - "70-74"
+                - "75-79"
+                - "80-84"
+                - "85+"
+                - "ignorado"
+      - name: cancer_group
+        description: Código do grupo analítico de câncer.
+        tests:
+          - not_null
+          - relationships:
+              to: ref('cancer_group_labels')
+              field: cancer_group
+      - name: deaths
+        description: Contagem de óbitos (nulo se suppressed).
+        tests:
+          - deaths_null_when_suppressed
+      - name: suppressed
+        description: Flag de supressão de célula pequena.
+        tests:
+          - not_null
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - year
+            - uf
+            - sexo
+            - age_group
+            - cancer_group
+
+  - name: stg_sim_ill_defined
+    description: Contagens de causas mal definidas R00–R99 (SIM).
+    columns:
+      - name: year
+        description: Ano do óbito.
+        tests:
+          - not_null
+      - name: uf
+        description: UF de residência.
+        tests:
+          - not_null
+      - name: sexo
+        description: Sexo (M/F/I).
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["M", "F", "I"]
+      - name: age_group
+        description: Faixa etária quinquenal.
+        tests:
+          - not_null
+      - name: deaths_ill_defined
+        description: Óbitos com causa R00–R99.
+        tests:
+          - not_null
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - year
+            - uf
+            - sexo
+            - age_group
+
+  - name: stg_ibge_population
+    description: População IBGE (idade simples), tipada.
+    columns:
+      - name: year
+        description: Ano de referência.
+        tests:
+          - not_null
+      - name: uf
+        description: UF.
+        tests:
+          - not_null
+      - name: sexo
+        description: Sexo (M/F).
+        tests:
+          - not_null
+          - accepted_values:
+              values: ["M", "F"]
+      - name: age
+        description: Idade simples (anos).
+        tests:
+          - not_null
+      - name: population
+        description: População projetada (≥ 0).
+        tests:
+          - not_null
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - year
+            - uf
+            - sexo
+            - age

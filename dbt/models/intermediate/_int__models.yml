@@ -1,0 +1,100 @@
+version: 2
+
+models:
+  - name: int_population_age_group
+    description: População IBGE agregada em faixas etárias quinquenais (OMS).
+    columns:
+      - name: year
+        description: Ano de referência.
+        tests:
+          - not_null
+      - name: uf
+        description: UF.
+        tests:
+          - not_null
+      - name: sexo
+        description: Sexo (M/F).
+        tests:
+          - not_null
+      - name: age_group
+        description: Faixa etária quinquenal.
+        tests:
+          - not_null
+          - accepted_values:
+              values:
+                - "00-04"
+                - "05-09"
+                - "10-14"
+                - "15-19"
+                - "20-24"
+                - "25-29"
+                - "30-34"
+                - "35-39"
+                - "40-44"
+                - "45-49"
+                - "50-54"
+                - "55-59"
+                - "60-64"
+                - "65-69"
+                - "70-74"
+                - "75-79"
+                - "80-84"
+                - "85+"
+      - name: population
+        description: Soma da população na faixa.
+        tests:
+          - not_null
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - year
+            - uf
+            - sexo
+            - age_group
+
+  - name: int_cancer_deaths_labeled
+    description: Óbitos por câncer com rótulo CID/GLOBOCAN em português.
+    columns:
+      - name: cancer_group
+        description: Código do grupo.
+        tests:
+          - not_null
+          - relationships:
+              to: ref('cancer_group_labels')
+              field: cancer_group
+      - name: cancer_group_label
+        description: Rótulo em português.
+        tests:
+          - not_null
+      - name: deaths
+        description: Contagem (nulo se suppressed).
+      - name: suppressed
+        description: Flag de supressão.
+        tests:
+          - not_null
+
+  - name: int_deaths_with_population
+    description: >
+      Óbitos não suprimidos com população e taxa bruta específica por idade
+      (por 100 mil). Exclui sexo I e faixa ignorado.
+    columns:
+      - name: year
+        tests:
+          - not_null
+      - name: uf
+        tests:
+          - not_null
+      - name: population
+        description: Denominador populacional da célula.
+        tests:
+          - not_null
+      - name: crude_rate_per_100k
+        description: Taxa bruta específica por idade × 100 mil.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - year
+            - uf
+            - sexo
+            - age_group
+            - cancer_group

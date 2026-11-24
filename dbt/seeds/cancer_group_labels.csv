@@ -1,0 +1,19 @@
+cancer_group,label_pt,cid_start,cid_end
+oral_pharynx,"Lábio, cavidade oral e faringe",C00,C14
+esophagus,Esôfago,C15,C15
+stomach,Estômago,C16,C16
+colorectal,"Cólon, reto e ânus",C18,C21
+liver,Fígado e vias biliares intra-hepáticas,C22,C22
+pancreas,Pâncreas,C25,C25
+lung,"Traqueia, brônquios e pulmão",C33,C34
+melanoma,Melanoma maligno da pele,C43,C43
+breast,Mama,C50,C50
+cervix,Colo do útero,C53,C53
+uterus,Corpo do útero e útero NE,C54,C55
+ovary,Ovário,C56,C56
+prostate,Próstata,C61,C61
+bladder,Bexiga,C67,C67
+cns,"Meninges, encéfalo e SNC",C70,C72
+thyroid,Tireoide,C73,C73
+lymphoma_leukemia,Linfomas e leucemias,C81,C96
+other_cancer,Outras neoplasias malignas (C00–C97),C00,C97

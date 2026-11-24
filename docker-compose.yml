@@ -8,7 +8,41 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
 
-  # Placeholders para semanas 4 (API / dashboard) — não usados na semana 1.
+  # Dagster UI + daemon embutido (dagster dev). Pipeline:
+  # ingest_sample → dbt_build → train_and_forecast → quality_checks
+  dagster:
+    build: .
+    image: cancer-mortality-forecast-br:local
+    command:
+      [
+        "dagster",
+        "dev",
+        "-m",
+        "orchestration.definitions",
+        "-h",
+        "0.0.0.0",
+        "-p",
+        "3000",
+      ]
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data/sample:/app/data/sample:ro
+      - ./data/processed:/app/data/processed
+      - ./dbt:/app/dbt
+      - ./orchestration:/app/orchestration
+      - ./forecasting:/app/forecasting
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DAGSTER_HOME=/tmp/dagster_home
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/server_info"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  # Placeholders para semanas 4 (API / dashboard).
   # api:
   #   build: .
   #   command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
